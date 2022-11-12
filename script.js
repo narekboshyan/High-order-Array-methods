@@ -309,145 +309,229 @@ Array.prototype.mySort = function (cb) {
 };
 
 const STATE = {
-    PENDING: "PENDING",
-    FULFILLED: "FULFILLED",
-    REJECTED: "REJECTED",
+    FULFILLED: "fulfilled",
+    REJECTED: "rejected",
+    PENDING: "pending",
 };
+
 class MyPromise {
-    constructor(callback) {
-        // Initial state of Promise is empty
-        this.state = STATE.PENDING;
-        this.value = undefined;
-        this.handlers = [];
-        // Invoke callback by passing the _resolve and the _reject function of our class
+    #thenCbs = [];
+    #catchCbs = [];
+    #state = STATE.PENDING;
+    #value;
+    #onSuccessBind = this.#onSuccess.bind(this);
+    #onFailBind = this.#onFail.bind(this);
+
+    constructor(cb) {
         try {
-            callback(this._resolve, this._reject);
-        } catch (err) {
-            this._reject(err);
+            cb(this.#onSuccessBind, this.#onFailBind);
+        } catch (e) {
+            this.#onFail(e);
         }
     }
-    _resolve = (value) => {
-        this.updateResult(value, STATE.FULFILLED);
-    };
 
-    _reject = (error) => {
-        this.updateResult(error, STATE.REJECTED);
-    };
+    #runCallbacks() {
+        if (this.#state === STATE.FULFILLED) {
+            this.#thenCbs.forEach((callback) => {
+                callback(this.#value);
+            });
 
-    isThenable(value) {
-        if (
-            typeof value === "object" &&
-            value !== null &&
-            value.then &&
-            typeof value.then === "function"
-        ) {
-            return true;
+            this.#thenCbs = [];
         }
-        return false;
+
+        if (this.#state === STATE.REJECTED) {
+            this.#catchCbs.forEach((callback) => {
+                callback(this.#value);
+            });
+
+            this.#catchCbs = [];
+        }
     }
 
-    updateResult(value, state) {
-        // This is to make the processing async
-        setTimeout(() => {
-            /*
-        Process the promise if it is still in pending state. 
-        An already rejected or resolved promise is not processed
-      */
-            if (this.state !== STATE.PENDING) {
+    #onSuccess(value) {
+        queueMicrotask(() => {
+            if (this.#state !== STATE.PENDING) return;
+
+            if (value instanceof MyPromise) {
+                value.then(this.#onSuccessBind, this.#onFailBind);
                 return;
             }
 
-            // check is value is also a promise
-            if (isThenable(value)) {
-                return value.then(this._resolve, this._reject);
-            }
-
-            this.value = value;
-            this.state = state;
-
-            // execute handlers if already attached
-            this.executeHandlers();
-        }, 0);
+            this.#value = value;
+            this.#state = STATE.FULFILLED;
+            this.#runCallbacks();
+        });
     }
 
-    then(onSuccess, onFail) {
-        return new MyPromise((res, rej) => {
-            this.addHandlers({
-                onSuccess: function (value) {
-                    // if no onSuccess provided, resolve the value for the next promise chain
-                    if (!onSuccess) {
-                        return res(value);
-                    }
-                    try {
-                        return res(onSuccess(value));
-                    } catch (err) {
-                        return rej(err);
-                    }
-                },
-                onFail: function (value) {
-                    // if no onFail provided, reject the value for the next promise chain
-                    if (!onFail) {
-                        return rej(value);
-                    }
-                    try {
-                        return res(onFail(value));
-                    } catch (err) {
-                        return rej(err);
-                    }
-                },
+    #onFail(value) {
+        queueMicrotask(() => {
+            if (this.#state !== STATE.PENDING) return;
+
+            if (value instanceof MyPromise) {
+                value.then(this.#onSuccessBind, this.#onFailBind);
+                return;
+            }
+
+            if (this.#catchCbs.length === 0) {
+                throw new UncaughtPromiseError(value);
+            }
+
+            this.#value = value;
+            this.#state = STATE.REJECTED;
+            this.#runCallbacks();
+        });
+    }
+
+    then(thenCb, catchCb) {
+        return new MyPromise((resolve, reject) => {
+            this.#thenCbs.push((result) => {
+                if (thenCb == null) {
+                    resolve(result);
+                    return;
+                }
+
+                try {
+                    resolve(thenCb(result));
+                } catch (error) {
+                    reject(error);
+                }
+            });
+
+            this.#catchCbs.push((result) => {
+                if (catchCb == null) {
+                    reject(result);
+                    return;
+                }
+
+                try {
+                    resolve(catchCb(result));
+                } catch (error) {
+                    reject(error);
+                }
+            });
+
+            this.#runCallbacks();
+        });
+    }
+
+    catch(cb) {
+        return this.then(undefined, cb);
+    }
+
+    finally(cb) {
+        return this.then(
+            (result) => {
+                cb();
+                return result;
+            },
+            (result) => {
+                cb();
+                throw result;
+            }
+        );
+    }
+
+    static resolve(value) {
+        return new Promise((resolve) => {
+            resolve(value);
+        });
+    }
+
+    static reject(value) {
+        return new Promise((resolve, reject) => {
+            reject(value);
+        });
+    }
+
+    static all(promises) {
+        const results = [];
+        let completedPromises = 0;
+        return new MyPromise((resolve, reject) => {
+            for (let i = 0; i < promises.length; i++) {
+                const promise = promises[i];
+                promise
+                    .then((value) => {
+                        completedPromises++;
+                        results[i] = value;
+                        if (completedPromises === promises.length) {
+                            resolve(results);
+                        }
+                    })
+                    .catch(reject);
+            }
+        });
+    }
+
+    static allSettled(promises) {
+        const results = [];
+        let completedPromises = 0;
+        return new MyPromise((resolve) => {
+            for (let i = 0; i < promises.length; i++) {
+                const promise = promises[i];
+                promise
+                    .then((value) => {
+                        results[i] = { status: STATE.FULFILLED, value };
+                    })
+                    .catch((reason) => {
+                        results[i] = { status: STATE.REJECTED, reason };
+                    })
+                    .finally(() => {
+                        completedPromises++;
+                        if (completedPromises === promises.length) {
+                            resolve(results);
+                        }
+                    });
+            }
+        });
+    }
+
+    static race(promises) {
+        return new MyPromise((resolve, reject) => {
+            promises.forEach((promise) => {
+                promise.then(resolve).catch(reject);
             });
         });
     }
 
-    addHandlers(handlers) {
-        this.handlers.push(handlers);
-        this.executeHandlers();
+    static any(promises) {
+        const errors = [];
+        let rejectedPromises = 0;
+        return new MyPromise((resolve, reject) => {
+            for (let i = 0; i < promises.length; i++) {
+                const promise = promises[i];
+                promise.then(resolve).catch((value) => {
+                    rejectedPromises++;
+                    errors[i] = value;
+                    if (rejectedPromises === promises.length) {
+                        reject(
+                            new AggregateError(
+                                errors,
+                                "All promises were rejected"
+                            )
+                        );
+                    }
+                });
+            }
+        });
     }
+}
 
-    executeHandlers() {
-        // Don't execute handlers if promise is not yet fulfilled or rejected
-        if (this.state === STATE.PENDING) {
-            return null;
+class UncaughtPromiseError extends Error {
+    constructor(error) {
+        super(error);
+
+        this.stack = `(in promise) ${error.stack}`;
+    }
+}
+
+function deepClone(object) {
+    var newObject = {};
+    for (var key in object) {
+        if (typeof object[key] === "object" && object[key] !== null) {
+            newObject[key] = deepClone(object[key]);
+        } else {
+            newObject[key] = object[key];
         }
-
-        // We have multiple handlers because add them for .finally block too
-        this.handlers.forEach((handler) => {
-            if (this.state === STATE.FULFILLED) {
-                return handler.onSuccess(this.value);
-            }
-            return handler.onFail(this.value);
-        });
-        // After processing all handlers, we reset it to empty.
-        this.handlers = [];
     }
-
-    catch(onFail) {
-        return this.then(null, onFail);
-    }
-
-    // Finally block returns a promise which fails or succeedes with the previous promise resove value
-    finally(callback) {
-        return new MyPromise((res, rej) => {
-            let val;
-            let wasRejected;
-            this.then(
-                (value) => {
-                    wasRejected = false;
-                    val = value;
-                    return callback();
-                },
-                (err) => {
-                    wasRejected = true;
-                    val = err;
-                    return callback();
-                }
-            ).then(() => {
-                // If the callback didn't have any error we resolve/reject the promise based on promise state
-                if (!wasRejected) {
-                    return res(val);
-                }
-                return rej(val);
-            });
-        });
-    }
+    return newObject;
 }
