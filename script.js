@@ -10,7 +10,7 @@ Array.prototype.myFilter = function (callback) {
     const filteredArr = [];
     for (let i = 0; i < this.length; i++) {
         if (!!callback(this[i], i, this)) {
-            filteredArr.push(this[index]);
+            filteredArr.push(this[i]);
         }
     }
     return filteredArr;
@@ -43,153 +43,24 @@ Array.prototype.myForEach = function (callback) {
 };
 
 Array.prototype.mySome = function (callback) {
-    for (let i = 0; i < this; i++) {
-        if (callback(this[i], i, this)) return true;
+    for (let i = 0; i < this.length; i++) {
+        if (callback(this[i], i, this)) {
+            return true;
+        } else {
+            continue;
+        }
     }
+    return false;
 };
 
 Array.prototype.myEvery = function (callback) {
-    for (let i = 0; i < this; i++) {
-        if (!callback(this[i], i, this)) return false;
-    }
-};
-
-Array.prototype.myFlat = function (callback, depth = 0) {
-    if (depth < 1 || !Array.isArray(array)) {
-        return array;
-    }
-
-    return reduce(
-        array,
-        (result, current) => {
-            return concat(result, flat(current, depth - 1));
-        },
-        []
-    );
-};
-
-Array.prototype.myFlatMap = function (callback) {
-    return flat(map(array, callback), 1);
-};
-
-Array.prototype.myIncludes = function (searchedValue) {
-    return this.some(this, (value) => value === searchedValue);
-};
-
-Array.prototype.myConcat = function (...values) {
-    const result = [...array];
-    const { length } = values;
-
-    for (let i = 0; i < length; i += 1) {
-        const value = values[i];
-
-        if (Array.isArray(value)) {
-            push(result, ...value);
+    for (let i = 0; i < this.length; i++) {
+        if (!callback(this[i], i, this)) {
+            return false;
         } else {
-            push(result, value);
+            continue;
         }
     }
-
-    return result;
-};
-
-Array.prototype.myJoin = function (joinWith) {
-    return reduce(
-        this,
-        (result, current, index) => {
-            if (index === 0) {
-                return current;
-            }
-
-            return `${result}${joinWith}${current}`;
-        },
-        ""
-    );
-};
-
-Array.prototype.myReverse = function () {
-    const result = [];
-
-    const lastIndex = array.length - 1;
-
-    for (let index = lastIndex; index > -1; index -= 1) {
-        const value = array[index];
-        result[lastIndex - index] = value;
-    }
-
-    return result;
-};
-
-Array.prototype.myShift = function () {
-    const { length } = this;
-    const firstValue = this[0];
-
-    for (let index = 1; index < length; index += 1) {
-        const value = this[index];
-        this[index - 1] = value;
-    }
-
-    array.length = length - 1;
-
-    return firstValue;
-};
-
-Array.prototype.myUnshift = function (...values) {
-    const mergedArrays = concat(values, ...this);
-    const { length: mergedArraysLength } = mergedArrays;
-
-    for (let index = 0; index < mergedArraysLength; index += 1) {
-        const value = mergedArrays[index];
-        this[index] = value;
-    }
-
-    return array.length;
-};
-
-Array.prototype.mySlice = function (startIndex = 0, endIndex = this.length) {
-    const result = [];
-
-    for (let index = startIndex; index < endIndex; index += 1) {
-        const value = this[index];
-
-        if (index < this.length) {
-            push(result, value);
-        }
-    }
-
-    return result;
-};
-
-Array.prototype.mySplice = function (
-    insertAtIndex,
-    removeNumberOfElements,
-    ...values
-) {
-    const firstPart = slice(this, 0, insertAtIndex);
-    const secondPart = slice(this, insertAtIndex + removeNumberOfElements);
-
-    const removedElements = slice(
-        this,
-        insertAtIndex,
-        insertAtIndex + removeNumberOfElements
-    );
-
-    const joinedParts = firstPart.concat(values, secondPart);
-    const { length: joinedPartsLength } = joinedParts;
-
-    for (let index = 0; index < joinedPartsLength; index += 1) {
-        this[index] = joinedParts[index];
-    }
-
-    this.length = joinedPartsLength;
-
-    return removedElements;
-};
-
-Array.prototype.myPop = function () {
-    const value = this[this.length - 1];
-    this.length = this.length - 1;
-    return value;
 };
 
 Array.prototype.myPush = function (...values) {
@@ -203,14 +74,173 @@ Array.prototype.myPush = function (...values) {
     return this.length;
 };
 
+Array.prototype.myConcat = function (...values) {
+    const result = [...this];
+    const { length } = values;
+
+    for (let i = 0; i < length; i += 1) {
+        const value = values[i];
+
+        if (Array.isArray(value)) {
+            result.myPush(...value);
+        } else {
+            result.myPush(value);
+        }
+    }
+
+    return result;
+};
+
+// Custom array flat method
+Array.prototype.myFlat = function (depth = 1) {
+    if (depth < 1) {
+        return this;
+    }
+    return this.myReduce((acc, item) => {
+        if (Array.isArray(item)) {
+            acc = acc.myConcat(item.myFlat(depth - 1));
+        } else {
+            acc = [...acc, item];
+        }
+        return acc;
+    }, []);
+};
+
+// Flattening all nested arrays with recursion
+Array.prototype.flattenAllNestedArrays = function () {
+    return this.myReduce((acc, item) => {
+        if (Array.isArray(item)) {
+            acc = acc.myConcat(item.flattenAllNestedArrays());
+        } else {
+            acc = [...acc, item];
+        }
+        return acc;
+    }, []);
+};
+
+Array.prototype.myFlatMap = function (callback) {
+    return this.myFlat().myMap(callback);
+};
+
+Array.prototype.myIncludes = function (searchedValue) {
+    return this.mySome((value) => value === searchedValue);
+};
+
+Array.prototype.myConcat = function (...values) {
+    const result = [...this];
+
+    for (let i = 0; i < values.length; i += 1) {
+        const value = values[i];
+
+        if (Array.isArray(value)) {
+            result.myPush(...value);
+        } else {
+            result.myPush(value);
+        }
+    }
+
+    return result;
+};
+
+Array.prototype.myJoin = function (joinWith) {
+    return this.myReduce((result, current, index) => {
+        if (index === 0) {
+            return current;
+        }
+
+        return `${result}${joinWith}${current}`;
+    }, "");
+};
+
+Array.prototype.myReverse = function () {
+    const result = [];
+
+    for (let index = this.length - 1; index > -1; index -= 1) {
+        const value = this[index];
+        result[this.length - 1 - index] = value;
+    }
+
+    return result;
+};
+
+Array.prototype.myShift = function () {
+    const firstValue = this[0];
+
+    for (let index = 1; index < this.length; index += 1) {
+        const value = this[index];
+        this[index - 1] = value;
+    }
+
+    this.length = this.length - 1;
+
+    return firstValue;
+};
+
+Array.prototype.myUnshift = function (...values) {
+    const mergedArrays = values.myConcat(...this);
+    const { length: mergedArraysLength } = mergedArrays;
+
+    for (let i = 0; i < mergedArraysLength; i++) {
+        const value = mergedArrays[i];
+        this[i] = value;
+    }
+
+    return this.length;
+};
+
+Array.prototype.mySlice = function (startIndex = 0, endIndex = this.length) {
+    const result = [];
+
+    for (let index = startIndex; index < endIndex; index += 1) {
+        const value = this[index];
+
+        if (index < this.length) {
+            result.myPush(value);
+        }
+    }
+
+    return result;
+};
+
+Array.prototype.myPop = function () {
+    const value = this[this.length - 1];
+    this.length = this.length - 1;
+    return value;
+};
+
 Array.prototype.myFill = function (
     value,
     startIndex = 0,
     endIndex = this.length
 ) {
-    for (let index = startIndex; index <= endIndex; index += 1) {
-        this[index] = value;
+    for (let i = startIndex; i < endIndex; i++) {
+        this[i] = value;
     }
 
     return this;
+};
+
+Array.prototype.mySplice = function (
+    insertAtIndex,
+    removeNumberOfElements,
+    ...values
+) {
+    const firstPart = this.mySlice(0, insertAtIndex);
+    const secondPart = this.mySlice(insertAtIndex + removeNumberOfElements);
+
+    const removedElements = this.mySlice(
+        insertAtIndex,
+        insertAtIndex + removeNumberOfElements
+    );
+    const joinValues = secondPart.myConcat(values);
+    const joinedParts = firstPart.myConcat(joinValues);
+    const { length: joinedPartsLength } = joinedParts;
+
+    for (let i = 0; i < joinedPartsLength; i++) {
+        this[i] = joinedParts[i];
+    }
+
+    this.length = joinedPartsLength;
+
+    return removedElements;
 };
