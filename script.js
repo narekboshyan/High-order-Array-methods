@@ -244,3 +244,66 @@ Array.prototype.mySplice = function (
 
     return removedElements;
 };
+
+Array.prototype.myFindIndex = function (callback) {
+    for (let i = 0; i < this.length; i++) {
+        const value = array[i];
+
+        if (callback(value, i, array)) {
+            return i;
+        }
+    }
+
+    return -1;
+};
+
+Array.prototype.myFind = function (callback) {
+    const index = this.myFindIndex(callback);
+
+    if (index === -1) {
+        return undefined;
+    }
+
+    return array[index];
+};
+
+Array.prototype.myIndexOf = function (searchedValue) {
+    return this.myFindIndex((value) => value === searchedValue);
+};
+
+Array.prototype.myIndexOf = function (searchedValue) {
+    for (let index = array.length - 1; index > -1; index -= 1) {
+        const value = array[index];
+
+        if (value === searchedValue) {
+            return index;
+        }
+    }
+
+    return -1;
+};
+
+Array.prototype.mySort = function (cb) {
+    function defaultComparator(a, b) {
+        a = a.toString();
+        b = b.toString();
+        if (a < b) {
+            return -1;
+        }
+        if (a > b) {
+            return 1;
+        }
+        return 0;
+    }
+
+    for (var i = 0; i < this.length; i++) {
+        for (var j = i + 1; j < this.length; j++) {
+            if ((cb || defaultComparator)(this[i], this[j]) > 0) {
+                var swap = this[i];
+                this[i] = this[j];
+                this[j] = swap;
+            }
+        }
+    }
+    return this;
+};
